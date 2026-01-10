@@ -142,7 +142,7 @@ except Exception as e:
 from pyspark.sql.functions import col
 
 # Load taxi trips
-trips_df = spark.table(FILL_IN)
+trips_df = spark.table("samples.nyctaxi.trips")
 
 print(f"Loaded {trips_df.count():,} taxi trips")
 display(trips_df.limit(10))
@@ -182,7 +182,7 @@ print("✅ Task 1.1 complete: Data loaded successfully")
 from pyspark.sql.functions import pandas_udf
 import pandas as pd
 
-@pandas_udf(FILL_IN)
+@pandas_udf("struct<hour:int, day_of_week:int, is_weekend:int>")
 def extract_time_features(timestamps: pd.Series) -> pd.DataFrame:
     """
     Extract time-based features from timestamp column.
@@ -198,9 +198,9 @@ def extract_time_features(timestamps: pd.Series) -> pd.DataFrame:
 
     # Extract features
     return pd.DataFrame({
-        "hour": FILL_IN,
-        "day_of_week": FILL_IN,
-        "is_weekend": FILL_IN
+        "hour": dt.dt.hour,
+        "day_of_week": dt.dt.dayofweek,
+        "is_weekend": (dt.dt.dayofweek >= 5).astype(int)
     })
 
 # Apply the UDF to create time features
@@ -248,7 +248,7 @@ from pyspark.sql.functions import pandas_udf, struct
 import pandas as pd
 import numpy as np
 
-@pandas_udf(FILL_IN)
+@pandas_udf("struct<trip_duration_minutes:double, avg_speed_mph:double>")
 def calculate_trip_metrics(pickup_times: pd.Series, dropoff_times: pd.Series, distances: pd.Series) -> pd.DataFrame:
     """
     Calculate trip duration and average speed.
@@ -266,11 +266,11 @@ def calculate_trip_metrics(pickup_times: pd.Series, dropoff_times: pd.Series, di
     dropoff = pd.to_datetime(dropoff_times)
 
     # Calculate duration in minutes
-    duration_minutes = FILL_IN
+    duration_minutes = (dropoff - pickup).dt.total_seconds() / 60
 
     # Calculate average speed (mph) - handle division by zero
     duration_hours = duration_minutes / 60
-    avg_speed = FILL_IN
+    avg_speed = np.where(duration_hours > 0, distances / duration_hours, 0)
 
     return pd.DataFrame({
         "trip_duration_minutes": duration_minutes,
@@ -332,8 +332,8 @@ print(f"Valid trips: {valid_trips.count():,} (filtered from {trips_with_metrics.
 # Save to Delta
 (valid_trips
  .write
- .format(FILL_IN)
- .mode(FILL_IN)
+ .format("delta")
+ .mode("overwrite")
  .save(f"{working_dir}/features/taxi_features")
 )
 
@@ -404,14 +404,14 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 # Start MLflow run
 with mlflow.start_run(run_name="baseline_rf_model") as run:
     # Log parameters
-    mlflow.log_param(FILL_IN, FILL_IN)
-    mlflow.log_param(FILL_IN, FILL_IN)
-    mlflow.log_param(FILL_IN, FILL_IN)
+    mlflow.log_param("feature_set", "baseline_distance_features")
+    mlflow.log_param("n_estimators", 50)
+    mlflow.log_param("max_depth", 10)
 
     # Train model
     rf_model = RandomForestRegressor(
-        n_estimators=FILL_IN,
-        max_depth=FILL_IN,
+        n_estimators=50,
+        max_depth=10,
         random_state=42
     )
     rf_model.fit(X_train, y_train)
@@ -425,14 +425,14 @@ with mlflow.start_run(run_name="baseline_rf_model") as run:
     r2 = r2_score(y_test, y_pred)
 
     # Log metrics
-    mlflow.log_metric(FILL_IN, FILL_IN)
-    mlflow.log_metric(FILL_IN, FILL_IN)
-    mlflow.log_metric(FILL_IN, FILL_IN)
+    mlflow.log_metric("rmse", rmse)
+    mlflow.log_metric("mae", mae)
+    mlflow.log_metric("r2", r2)
 
     # Log model
     mlflow.sklearn.log_model(
         rf_model,
-        FILL_IN,
+        "model",
         input_example=X_train.head(5)
     )
 
@@ -477,14 +477,14 @@ X_train_enh, X_test_enh, y_train_enh, y_test_enh = train_test_split(X_enhanced, 
 # Start MLflow run
 with mlflow.start_run(run_name="enhanced_rf_model") as run:
     # Log parameters
-    mlflow.log_param(FILL_IN, FILL_IN)
-    mlflow.log_param(FILL_IN, FILL_IN)
-    mlflow.log_param(FILL_IN, FILL_IN)
+    mlflow.log_param("feature_set", "enhanced_with_time_features")
+    mlflow.log_param("n_estimators", 100)
+    mlflow.log_param("max_depth", 15)
 
     # Train model with more trees and depth
     rf_model_enh = RandomForestRegressor(
-        n_estimators=FILL_IN,
-        max_depth=FILL_IN,
+        n_estimators=100,
+        max_depth=15,
         random_state=42
     )
     rf_model_enh.fit(X_train_enh, y_train_enh)
@@ -498,14 +498,14 @@ with mlflow.start_run(run_name="enhanced_rf_model") as run:
     r2_enh = r2_score(y_test_enh, y_pred_enh)
 
     # Log metrics
-    mlflow.log_metric(FILL_IN, FILL_IN)
-    mlflow.log_metric(FILL_IN, FILL_IN)
-    mlflow.log_metric(FILL_IN, FILL_IN)
+    mlflow.log_metric("rmse", rmse_enh)
+    mlflow.log_metric("mae", mae_enh)
+    mlflow.log_metric("r2", r2_enh)
 
     # Log model
     mlflow.sklearn.log_model(
         rf_model_enh,
-        FILL_IN,
+        "model",
         input_example=X_train_enh.head(5)
     )
 
@@ -541,8 +541,8 @@ experiment = mlflow.get_experiment_by_name(mlflow_experiment_path)
 
 # Search runs, ordered by RMSE (ascending = better)
 all_runs = mlflow.search_runs(
-    experiment_ids=[FILL_IN],
-    order_by=[FILL_IN]
+    experiment_ids=[experiment.experiment_id],
+    order_by=["metrics.rmse ASC"]
 )
 
 # Display comparison
@@ -590,8 +590,8 @@ best_model_uri = f"runs:/{best_run['run_id']}/model"
 try:
     # Register model
     model_version = mlflow.register_model(
-        model_uri=FILL_IN,
-        name=FILL_IN
+        model_uri=best_model_uri,
+        name=model_name
     )
 
     print(f"✅ Model registered: {model_name} (version {model_version.version})")
@@ -601,9 +601,9 @@ try:
     client = MlflowClient()
 
     client.transition_model_version_stage(
-        name=FILL_IN,
-        version=FILL_IN,
-        stage=FILL_IN
+        name=model_name,
+        version=model_version.version,
+        stage="Staging"
     )
 
     print(f"✅ Model transitioned to Staging stage")
@@ -651,12 +651,12 @@ import pandas as pd
 
 # Get the best model URI and load the model
 best_model_uri = f"runs:/{best_run['run_id']}/model"
-loaded_model = mlflow.pyfunc.load_model(FILL_IN)
+loaded_model = mlflow.pyfunc.load_model(best_model_uri)
 
 print(f"✅ Loaded model from: {best_model_uri}")
 
 # Create Pandas UDF that uses the loaded model
-@pandas_udf(FILL_IN)
+@pandas_udf("double")
 def predict_fare_udf(trip_distance: pd.Series, trip_duration_minutes: pd.Series,
                       pickup_hour: pd.Series, pickup_day_of_week: pd.Series,
                       is_weekend: pd.Series) -> pd.Series:
@@ -666,11 +666,11 @@ def predict_fare_udf(trip_distance: pd.Series, trip_duration_minutes: pd.Series,
     """
     # Construct feature DataFrame matching model's expected input
     features_df = pd.DataFrame({
-        "trip_distance": FILL_IN,
-        "trip_duration_minutes": FILL_IN,
-        "pickup_hour": FILL_IN,
-        "pickup_day_of_week": FILL_IN,
-        "is_weekend": FILL_IN
+        "trip_distance": trip_distance,
+        "trip_duration_minutes": trip_duration_minutes,
+        "pickup_hour": pickup_hour,
+        "pickup_day_of_week": pickup_day_of_week,
+        "is_weekend": is_weekend
     })
 
     # Make predictions using the loaded model
@@ -708,11 +708,11 @@ features_spark_df = spark.read.format("delta").load(f"{working_dir}/features/tax
 predictions_df = features_spark_df.withColumn(
     "predicted_fare",
     predict_fare_udf(
-        col(FILL_IN),
-        col(FILL_IN),
-        col(FILL_IN),
-        col(FILL_IN),
-        col(FILL_IN)
+        col("trip_distance"),
+        col("trip_duration_minutes"),
+        col("pickup_hour"),
+        col("pickup_day_of_week"),
+        col("is_weekend")
     )
 )
 
@@ -798,8 +798,8 @@ predictions_to_save = predictions_df.select(
 # Save to Delta
 (predictions_to_save
  .write
- .format(FILL_IN)
- .mode(FILL_IN)
+ .format("delta")
+ .mode("overwrite")
  .save(f"{working_dir}/predictions/fare_predictions")
 )
 

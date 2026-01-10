@@ -39,15 +39,15 @@ from pyspark.sql.types import *
 from pyspark.sql.functions import *
 
 import pandas as pd
-import FILL_IN
+import mlflow
 from mlflow.tracking import MlflowClient
 from delta.tables import DeltaTable
 
 import matplotlib.pyplot as plt
 from sklearn.metrics import (
-    FILL_IN,
-    FILL_IN,
-    FILL_IN
+    confusion_matrix,
+    classification_report,
+    ConfusionMatrixDisplay
 )
 
 # COMMAND ----------
@@ -60,7 +60,7 @@ from sklearn.metrics import (
 
 # COMMAND ----------
 
-df_gold = spark.read.format(FILL_IN).table(FILL_IN)
+df_gold = spark.read.format("delta").table("tweets_gold")
 
 print(f"Gold table rows: {df_gold.count():,}")
 
@@ -74,12 +74,12 @@ print(f"Gold table rows: {df_gold.count():,}")
 # COMMAND ----------
 
 tmp = df_gold.toPandas()
-y_true = tmp.FILL_IN.values
-y_pred = tmp.FILL_IN.values
+y_true = tmp.sentiment_id.values
+y_pred = tmp.predicted_sentiment_id.values
 
-target_names = [FILL_IN, FILL_IN]
+target_names = ["Negative", "Positive"]
 
-cr = classification_report(FILL_IN, FILL_IN, target_names=FILL_IN, output_dict=FILL_IN)
+cr = classification_report(y_true, y_pred, target_names=target_names, output_dict=True)
 
 print(cr)
 
@@ -104,11 +104,11 @@ print(cr)
 
 # COMMAND ----------
 
-cm = FILL_IN(FILL_IN, FILL_IN)
+cm = confusion_matrix(y_true, y_pred)
 
-disp = FILL_IN(
-    confusion_matrix=FILL_IN,
-    display_labels=FILL_IN
+disp = ConfusionMatrixDisplay(
+    confusion_matrix=cm,
+    display_labels=target_names
 )
 
 disp.plot()
@@ -134,26 +134,26 @@ plt.show()
 
 # COMMAND ----------
 
-mlflow.set_registry_uri(FILL_IN)
+mlflow.set_registry_uri("databricks-uc")
 
 client = MlflowClient()
-prod_version = FILL_IN
+prod_version = 1
 
-table_name = FILL_IN
+table_name = "/path/to/tweets_silver"
 deltaTable = DeltaTable.forPath(spark, table_name)
 
 history_df = deltaTable.history() \
-    .select(FILL_IN) \
-    .orderBy(FILL_IN, ascending=False)
+    .select("version") \
+    .orderBy("timestamp", ascending=False)
 
 silver_delta_version = history_df.collect()[0][0]
 
 with mlflow.start_run():
-    mlflow.log_metric(FILL_IN, cr[FILL_IN])
-    mlflow.log_param(FILL_IN, FILL_IN)
-    mlflow.log_param(FILL_IN, FILL_IN)
-    mlflow.log_param(FILL_IN, FILL_IN)
-    mlflow.log_figure(FILL_IN, FILL_IN)
+    mlflow.log_metric("accuracy", cr["accuracy"])
+    mlflow.log_param("model_name", "workspace.default.tweet_sentiment_model")
+    mlflow.log_param("model_version", prod_version)
+    mlflow.log_param("silver_delta_version", silver_delta_version)
+    mlflow.log_figure(disp.figure_, "confusion_matrix.png")
 
 print("✅ Metrics logged to MLflow!")
 

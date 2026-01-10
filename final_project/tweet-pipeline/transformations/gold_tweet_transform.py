@@ -35,14 +35,14 @@
 
 # COMMAND ----------
 
-from pyspark import FILL_IN as dp
+from pyspark import pipelines as dp
 from pyspark.sql.types import *
 from pyspark.sql.functions import *
-import FILL_IN
+import mlflow
 
 # COMMAND ----------
 
-dp.create_streaming_table(FILL_IN, comment=FILL_IN)
+dp.create_streaming_table("tweets_gold", comment="Gold table with sentiment predictions from ML model")
 
 # COMMAND ----------
 
@@ -54,7 +54,7 @@ dp.create_streaming_table(FILL_IN, comment=FILL_IN)
 
 # COMMAND ----------
 
-mlflow.set_registry_uri(FILL_IN)
+mlflow.set_registry_uri("databricks-uc")
 
 # COMMAND ----------
 
@@ -70,8 +70,8 @@ mlflow.set_registry_uri(FILL_IN)
 # COMMAND ----------
 
 result_schema = StructType([
-    StructField(FILL_IN, FILL_IN, True),
-    StructField(FILL_IN, FILL_IN, True)
+    StructField("label", StringType(), True),
+    StructField("score", DoubleType(), True)
 ])
 
 # COMMAND ----------
@@ -94,12 +94,12 @@ result_schema = StructType([
 
 # COMMAND ----------
 
-MODEL_URI = FILL_IN
+MODEL_URI = "models:/workspace.default.tweet_sentiment_model/1"
 
 sentiment_model_udf = mlflow.pyfunc.spark_udf(
-    FILL_IN,
-    model_uri=FILL_IN,
-    result_type=FILL_IN
+    spark,
+    model_uri=MODEL_URI,
+    result_type=result_schema
 )
 
 # COMMAND ----------
@@ -120,29 +120,29 @@ sentiment_model_udf = mlflow.pyfunc.spark_udf(
 
 # COMMAND ----------
 
-@dp.append_flow(target = FILL_IN, name = FILL_IN)
+@dp.append_flow(target = "tweets_gold", name = "gold_transformation")
 def tweets_gold_transform():
-  df = spark.readStream.table(FILL_IN)
+  df = spark.readStream.table("tweets_silver")
 
   return (
      df
-      .withColumn(FILL_IN, sentiment_model_udf(col(FILL_IN)))
-      .withColumn(FILL_IN, col(FILL_IN))
-      .withColumn(FILL_IN, col(FILL_IN) * FILL_IN)
-      .withColumn(FILL_IN,
-                  when(col(FILL_IN) == FILL_IN, FILL_IN)
-                  .when(col(FILL_IN) == FILL_IN, FILL_IN)
-                  .otherwise(FILL_IN))
-      .withColumn(FILL_IN,
-                  when(col(FILL_IN) == FILL_IN, FILL_IN)
-                  .when(col(FILL_IN) == FILL_IN, FILL_IN)
-                  .otherwise(FILL_IN))
-      .withColumn(FILL_IN,
-                  when(col(FILL_IN) == FILL_IN, FILL_IN)
-                  .when(col(FILL_IN) == FILL_IN, FILL_IN)
-                  .otherwise(FILL_IN))
-      .select(FILL_IN, FILL_IN, FILL_IN, FILL_IN, FILL_IN,
-              FILL_IN, FILL_IN, FILL_IN, FILL_IN)
+      .withColumn("model_output", sentiment_model_udf(col("cleaned_text")))
+      .withColumn("predicted_sentiment_label", col("model_output.label"))
+      .withColumn("score_percentage", col("model_output.score") * 100)
+      .withColumn("predicted_sentiment",
+                  when(col("predicted_sentiment_label") == "LABEL_0", "negative")
+                  .when(col("predicted_sentiment_label") == "LABEL_1", "neutral")
+                  .otherwise("positive"))
+      .withColumn("sentiment_id",
+                  when(col("sentiment") == "negative", 0)
+                  .when(col("sentiment") == "positive", 1)
+                  .otherwise(1))
+      .withColumn("predicted_sentiment_id",
+                  when(col("predicted_sentiment") == "negative", 0)
+                  .when(col("predicted_sentiment") == "positive", 1)
+                  .otherwise(1))
+      .select("id", "created_at", "text", "cleaned_text", "sentiment",
+              "sentiment_id", "predicted_sentiment", "predicted_sentiment_id", "score_percentage")
   )
 
 # COMMAND ----------
