@@ -2,191 +2,140 @@
 # MAGIC %md
 # MAGIC # Sentiment Model Performance Analysis
 # MAGIC
-# MAGIC ## Learning Objectives
-# MAGIC - Evaluate ML model performance using classification metrics
-# MAGIC - Generate confusion matrices for binary classification
-# MAGIC - Log metrics and artifacts to MLflow experiments
-# MAGIC - Track model and data versions for reproducibility
+# MAGIC ## Purpose
+# MAGIC Evaluate sentiment classification model performance by comparing predictions against ground truth.
+# MAGIC Generate classification metrics and log results to MLflow for experiment tracking.
 # MAGIC
-# MAGIC ## Business Context
-# MAGIC This notebook analyzes the performance of the sentiment classification model
-# MAGIC by comparing predicted sentiment against ground truth labels from the gold table.
+# MAGIC ## Requirements
+# MAGIC - Load tweets_gold table with predictions and ground truth
+# MAGIC - Calculate classification metrics (accuracy, precision, recall, F1)
+# MAGIC - Generate confusion matrix visualization
+# MAGIC - Log metrics, parameters, and artifacts to MLflow
 # MAGIC
-# MAGIC ## Evaluation Metrics
-# MAGIC We'll compute standard classification metrics:
-# MAGIC - **Accuracy**: Overall correctness (correct predictions / total predictions)
-# MAGIC - **Precision**: Of predicted positives, how many were actually positive
-# MAGIC - **Recall**: Of actual positives, how many did we predict correctly
-# MAGIC - **F1-Score**: Harmonic mean of precision and recall
+# MAGIC ## Expected Output
+# MAGIC - Classification report with per-class metrics
+# MAGIC - Confusion matrix visualization
+# MAGIC - MLflow experiment with accuracy metric and confusion matrix artifact
 # MAGIC
-# MAGIC ## Binary Classification
-# MAGIC We treat this as binary classification:
-# MAGIC - Class 0: Negative sentiment
-# MAGIC - Class 1: Positive or neutral sentiment (combined)
-# MAGIC
-# MAGIC ## MLflow Tracking
-# MAGIC We'll log all results to MLflow for:
-# MAGIC - Version control (which model version produced these results?)
-# MAGIC - Data lineage (which Delta table version was used?)
-# MAGIC - Reproducibility (can we reproduce these exact results?)
-# MAGIC
-# MAGIC **Note**: This notebook is not executed as part of the pipeline.
-# MAGIC Run it manually after the pipeline completes to analyze model performance.
+# MAGIC ## Reference
+# MAGIC See Lab 0.5 (MLops) for MLflow experiment tracking patterns
 
 # COMMAND ----------
 
-from pyspark.sql.types import *
-from pyspark.sql.functions import *
+# TODO: Import necessary libraries
+# You will need:
+# - pyspark.sql functions
+# - pandas
+# - mlflow and MlflowClient
+# - delta.tables.DeltaTable
+# - matplotlib.pyplot
+# - sklearn.metrics (confusion_matrix, classification_report, ConfusionMatrixDisplay)
 
-import pandas as pd
-import mlflow
-from mlflow.tracking import MlflowClient
-from delta.tables import DeltaTable
-
-import matplotlib.pyplot as plt
-from sklearn.metrics import (
-    confusion_matrix,
-    classification_report,
-    ConfusionMatrixDisplay
-)
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Task 1: Load Gold Data
 # MAGIC
-# MAGIC Read the tweets_gold table to get predicted and actual sentiments.
-# MAGIC We need the binary sentiment IDs for classification metrics.
+# MAGIC TODO: Read the tweets_gold table to get predicted and actual sentiments
+# MAGIC - Load table using spark.read.format("delta").table()
+# MAGIC - Table contains sentiment_id (ground truth) and predicted_sentiment_id (model prediction)
+# MAGIC - Both are binary: 0=negative, 1=positive/neutral
 
 # COMMAND ----------
 
-df_gold = spark.read.format("delta").table("tweets_gold")
+# TODO: Load gold table
 
-print(f"Gold table rows: {df_gold.count():,}")
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Task 2: Generate Classification Report
 # MAGIC
-# MAGIC Convert to pandas and compute precision, recall, F1-score for each class.
+# MAGIC TODO: Convert to pandas and compute classification metrics
+# MAGIC 1. Convert gold DataFrame to pandas using .toPandas()
+# MAGIC 2. Extract y_true from sentiment_id column
+# MAGIC 3. Extract y_pred from predicted_sentiment_id column
+# MAGIC 4. Define target_names as ["Negative", "Positive"]
+# MAGIC 5. Generate classification_report with output_dict=True
+# MAGIC
+# MAGIC Reference: sklearn.metrics.classification_report
 
 # COMMAND ----------
 
-tmp = df_gold.toPandas()
-y_true = tmp.sentiment_id.values
-y_pred = tmp.predicted_sentiment_id.values
+# TODO: Generate classification report
 
-target_names = ["Negative", "Positive"]
-
-cr = classification_report(y_true, y_pred, target_names=target_names, output_dict=True)
-
-print(cr)
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Task 3: Create Confusion Matrix
 # MAGIC
-# MAGIC Visualize model performance with a confusion matrix.
+# MAGIC TODO: Visualize model performance with confusion matrix
+# MAGIC 1. Generate confusion matrix using sklearn.metrics.confusion_matrix
+# MAGIC 2. Create ConfusionMatrixDisplay with target names
+# MAGIC 3. Plot and display the matrix
 # MAGIC
-# MAGIC **Confusion Matrix Layout**:
-# MAGIC ```
+# MAGIC Confusion Matrix Layout:
 # MAGIC                Predicted
 # MAGIC              Neg    Pos
 # MAGIC Actual  Neg   TN     FP
 # MAGIC        Pos   FN     TP
-# MAGIC ```
-# MAGIC - TN (True Negative): Correctly predicted negative
-# MAGIC - FP (False Positive): Predicted positive, actually negative
-# MAGIC - FN (False Negative): Predicted negative, actually positive
-# MAGIC - TP (True Positive): Correctly predicted positive
 
 # COMMAND ----------
 
-cm = confusion_matrix(y_true, y_pred)
+# TODO: Create and display confusion matrix
 
-disp = ConfusionMatrixDisplay(
-    confusion_matrix=cm,
-    display_labels=target_names
-)
-
-disp.plot()
-plt.show()
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Task 4: Log Results to MLflow
 # MAGIC
-# MAGIC Track model performance metrics and artifacts in an MLflow experiment.
+# MAGIC TODO: Track model performance in MLflow experiment
+# MAGIC 1. Set MLflow registry to Unity Catalog: mlflow.set_registry_uri("databricks-uc")
+# MAGIC 2. Get Delta table version from tweets_silver (for data lineage)
+# MAGIC 3. Start MLflow run
+# MAGIC 4. Log metrics:
+# MAGIC    - accuracy from classification report
+# MAGIC 5. Log parameters:
+# MAGIC    - model_name: "workspace.default.tweet_sentiment_model"
+# MAGIC    - model_version: 1
+# MAGIC    - silver_delta_version: from Delta table history
+# MAGIC 6. Log artifact:
+# MAGIC    - confusion matrix figure as "confusion_matrix.png"
 # MAGIC
-# MAGIC **What we'll log**:
-# MAGIC - **Metrics**: Accuracy (overall correctness percentage)
-# MAGIC - **Parameters**: Model name, model version, data version (for reproducibility)
-# MAGIC - **Artifacts**: Confusion matrix image
-# MAGIC
-# MAGIC **Why MLflow?**:
-# MAGIC - Version control: Track which model produced these results
-# MAGIC - Data lineage: Track which data version was used
-# MAGIC - Reproducibility: Reproduce exact results later
-# MAGIC - Comparison: Compare multiple model versions
+# MAGIC Reference: Lab 0.5 for MLflow logging patterns
 
 # COMMAND ----------
 
-mlflow.set_registry_uri("databricks-uc")
+# TODO: Log metrics and artifacts to MLflow
 
-client = MlflowClient()
-prod_version = 1
-
-table_name = "/path/to/tweets_silver"
-deltaTable = DeltaTable.forPath(spark, table_name)
-
-history_df = deltaTable.history() \
-    .select("version") \
-    .orderBy("timestamp", ascending=False)
-
-silver_delta_version = history_df.collect()[0][0]
-
-with mlflow.start_run():
-    mlflow.log_metric("accuracy", cr["accuracy"])
-    mlflow.log_param("model_name", "workspace.default.tweet_sentiment_model")
-    mlflow.log_param("model_version", prod_version)
-    mlflow.log_param("silver_delta_version", silver_delta_version)
-    mlflow.log_figure(disp.figure_, "confusion_matrix.png")
-
-print("✅ Metrics logged to MLflow!")
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Validation
 # MAGIC
-# MAGIC Check that the MLflow experiment contains:
-# MAGIC - accuracy metric (e.g., 0.85 = 85% correct)
-# MAGIC - model_name parameter (workspace.default.tweet_sentiment_model)
-# MAGIC - model_version parameter (1)
-# MAGIC - silver_delta_version parameter (Delta table version number)
-# MAGIC - confusion_matrix.png artifact (visualization image)
+# MAGIC After running this notebook, verify in the MLflow UI:
+# MAGIC 1. Navigate to "Experiments" tab
+# MAGIC 2. Find experiment for this notebook
+# MAGIC 3. Check latest run contains:
+# MAGIC    - accuracy metric (e.g., 0.85 = 85% correct)
+# MAGIC    - model_name, model_version, silver_delta_version parameters
+# MAGIC    - confusion_matrix.png artifact
 # MAGIC
-# MAGIC **How to view results**:
-# MAGIC 1. Navigate to the "Experiments" tab in Databricks
-# MAGIC 2. Find the experiment for this notebook
-# MAGIC 3. Click on the latest run
-# MAGIC 4. View metrics, parameters, and artifacts
+# MAGIC ## Interpreting Results
 # MAGIC
-# MAGIC **Interpreting Results**:
-# MAGIC - **High accuracy** (>80%): Model is performing well overall
-# MAGIC - **Confusion matrix diagonal** (TN, TP): Correct predictions
-# MAGIC - **Off-diagonal** (FP, FN): Misclassifications to investigate
-# MAGIC - **Imbalanced matrix**: May indicate class imbalance or bias
+# MAGIC **Accuracy**:
+# MAGIC - High (>80%): Model performing well
+# MAGIC - Low (<70%): Consider different model or fine-tuning
+# MAGIC
+# MAGIC **Confusion Matrix**:
+# MAGIC - Diagonal (TN, TP): Correct predictions
+# MAGIC - Off-diagonal (FP, FN): Misclassifications
+# MAGIC - Imbalanced: May indicate class imbalance or bias
 # MAGIC
 # MAGIC **Next Steps**:
-# MAGIC - If accuracy is low (<70%), consider:
-# MAGIC   - Using a different model
-# MAGIC   - Fine-tuning the model on tweet data
-# MAGIC   - Improving text preprocessing
-# MAGIC - If confusion matrix shows bias (many FP or FN), investigate:
-# MAGIC   - Class distribution in training data
-# MAGIC   - Model confidence thresholds
-# MAGIC   - Text cleaning quality
+# MAGIC - If accuracy low: Try different model, improve preprocessing
+# MAGIC - If confusion matrix shows bias: Investigate class distribution, confidence thresholds

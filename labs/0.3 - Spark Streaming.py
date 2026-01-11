@@ -93,6 +93,46 @@ except Exception as e:
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Verification Utilities
+# MAGIC
+# MAGIC These utility functions help you verify your work throughout the lab.
+
+# COMMAND ----------
+
+from pyspark.sql.functions import col
+
+def verify_schema(df, expected_columns):
+    """Check if DataFrame has expected columns."""
+    missing = set(expected_columns) - set(df.columns)
+    if missing:
+        print(f"❌ Missing columns: {missing}")
+        return False
+    print(f"✅ Schema correct: {len(expected_columns)} columns present")
+    return True
+
+def check_streaming_query(query_name):
+    """Check if a streaming query is running."""
+    active_queries = [q.name for q in spark.streams.active]
+    if query_name in active_queries:
+        print(f"✅ Streaming query '{query_name}' is active")
+        return True
+    else:
+        print(f"❌ Streaming query '{query_name}' not found")
+        return False
+
+def inspect_stream_output(path, num_rows=5, description=""):
+    """Read streaming output as batch DataFrame and display sample."""
+    print(f"\n📊 {description}")
+    df = spark.read.format("delta").load(path)
+    display(df.limit(num_rows))
+    print(f"Total rows in output: {df.count():,}")
+    return df
+
+print("✅ Verification utilities loaded")
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ---
 # MAGIC # Important: Databricks Free Edition Compatibility
 # MAGIC
@@ -190,23 +230,23 @@ print("✅ Task 1.1 complete: Streaming source data prepared")
 
 # COMMAND ----------
 
-# TODO
-# Read streaming data, write to test location, and verify output
-# Hint: Use spark.readStream.format("delta").load(path)
+# TODO: Create streaming DataFrame and write to test location
+# 1. Read stream: format="delta", load from f"{working_dir}/streaming_source"
+# 2. Write stream: format="delta", outputMode="append", checkpoint, trigger, start path
 
 streaming_df = (spark.readStream
-    .format(FILL_IN)  # "delta"
-    .load(FILL_IN)  # f"{working_dir}/streaming_source"
+    .format(  )  # Delta format
+    .load(  )  # Path to streaming_source
 )
 
 # Write streaming data to test location
 test_query = (streaming_df
     .writeStream
-    .format(FILL_IN)  # "delta"
-    .outputMode(FILL_IN)  # "append"
-    .option("checkpointLocation", FILL_IN)  # f"{checkpoint_dir}/test_stream"
-    .trigger(FILL_IN)  # availableNow=True
-    .start(FILL_IN)  # f"{working_dir}/test_stream"
+    .format(  )  # Delta format
+    .outputMode(  )  # "append" for non-aggregated data
+    .option("checkpointLocation",  )  # Checkpoint path: f"{checkpoint_dir}/test_stream"
+    .trigger(  )  # availableNow=True for Free Edition
+    .start(  )  # Output path: f"{working_dir}/test_stream"
 )
 
 # Wait for processing to complete
@@ -239,18 +279,17 @@ print("📝 Note: In Free Edition, we write streams and verify outputs by readin
 
 # COMMAND ----------
 
-# TODO
-# Write streaming data to Delta table with checkpoint
-# IMPORTANT: Use "append" mode for raw streaming data (no aggregations)
-# Use "update" or "complete" only for aggregated streams
+# TODO: Write streaming query with checkpoint
+# Configure: format, outputMode="append", checkpoint location, trigger, output path
+# Paths: checkpoint=f"{checkpoint_dir}/real_time_sales", output=f"{working_dir}/real_time_sales"
 
 query = (streaming_df
     .writeStream
-    .format(FILL_IN)  # "delta"
-    .outputMode(FILL_IN)  # "append" (must be append for non-aggregated data)
-    .option("checkpointLocation", FILL_IN)  # f"{checkpoint_dir}/real_time_sales"
-    .trigger(FILL_IN)  # availableNow=True (required for Free Edition)
-    .start(FILL_IN)  # f"{working_dir}/real_time_sales"
+    .format(  )  # Delta format
+    .outputMode(  )  # "append" for non-aggregated data
+    .option("checkpointLocation",  )  # f"{checkpoint_dir}/real_time_sales"
+    .trigger(  )  # availableNow=True for Free Edition
+    .start(  )  # f"{working_dir}/real_time_sales"
 )
 
 # Wait for all data to be processed
@@ -295,12 +334,12 @@ monitor_query = (spark.readStream
     .start(f"{working_dir}/monitor_demo")
 )
 
-# TODO: Get query information
-# Hint: Use query.id, query.isActive, query.status
+# TODO: Access query properties
+# Use monitor_query.id, monitor_query.isActive, monitor_query.status
 
-print(f"Query ID: {FILL_IN}")
-print(f"Is Active: {FILL_IN}")
-print(f"Status: {FILL_IN}")
+print(f"Query ID: {  }")  # Get query ID
+print(f"Is Active: {  }")  # Check if query is active
+print(f"Status: {  }")  # Get query status
 
 # List all active queries
 print(f"\nAll active queries: {len(spark.streams.active)}")
@@ -346,16 +385,16 @@ print("📝 Always stop streaming queries when done to free up cluster resources
 
 # COMMAND ----------
 
-# TODO
-# Read streaming data and add watermark
-# Hint: Use withWatermark("timestamp_column", "interval")
+# TODO: Add watermark to handle late-arriving data
+# Use withWatermark("dateTime", "10 minutes")
+# This tells Spark to wait up to 10 minutes for late transactions
 
 from pyspark.sql.functions import window, sum, count, avg
 
 streaming_df = (spark.readStream
     .format("delta")
     .load(f"{working_dir}/streaming_source")
-    .withWatermark(FILL_IN, FILL_IN)  # "dateTime", "10 minutes"
+    .withWatermark(  ,  )  # Column name and interval
 )
 
 print("✅ Streaming DataFrame with watermark created")
@@ -379,30 +418,30 @@ print("📝 Watermarks balance between waiting for late data and finalizing resu
 
 # COMMAND ----------
 
-# TODO
-# Aggregate streaming data by hour and write to Delta
-# Hint: Use window(col("timestamp"), "duration") in groupBy
+# TODO: Aggregate streaming data by hour and write to Delta
+# Use window() function to create 1-hour time buckets
+# Group by window and franchiseID, then calculate aggregations
 
 hourly_sales_df = (streaming_df
     .groupBy(
-        window(col(FILL_IN), FILL_IN),  # "dateTime", "1 hour"
-        col(FILL_IN)  # "franchiseID"
+        window(col(  ), "  "),  # Column name and window duration
+        col(  )  # Franchise column for grouping
     )
     .agg(
-        sum(FILL_IN).alias("total_sales"),  # "totalPrice"
-        count(FILL_IN).alias("transaction_count"),  # "transactionID"
-        avg(FILL_IN).alias("avg_transaction_value")  # "totalPrice"
+        sum(  ).alias("total_sales"),  # Column to sum
+        count(  ).alias("transaction_count"),  # Column to count
+        avg(  ).alias("avg_transaction_value")  # Column to average
     )
 )
 
 # Write the aggregated stream to Delta
 hourly_query = (hourly_sales_df
     .writeStream
-    .format(FILL_IN)  # "delta"
-    .outputMode(FILL_IN)  # "append" (only mode supported in Free Edition)
-    .option("checkpointLocation", FILL_IN)  # f"{checkpoint_dir}/hourly_verification"
-    .trigger(FILL_IN)  # availableNow=True
-    .start(FILL_IN)  # f"{working_dir}/hourly_verification"
+    .format(  )  # Delta format
+    .outputMode(  )  # Output mode for windowed aggregations
+    .option("checkpointLocation",  )  # Checkpoint path
+    .trigger(  )  # Trigger type
+    .start(  )  # Output path
 )
 
 # Wait for processing to complete
@@ -431,17 +470,17 @@ print("📝 The window column contains the start/end time of each hourly bucket"
 
 # COMMAND ----------
 
-# TODO
-# Write aggregated stream to Delta
+# TODO: Write aggregated stream to Delta
 # IMPORTANT: Use "append" mode (only mode supported in Free Edition)
+# Configure checkpoint and output paths
 
 query = (hourly_sales_df
     .writeStream
-    .format(FILL_IN)  # "delta"
-    .outputMode(FILL_IN)  # "append" (only mode supported in Free Edition)
-    .option("checkpointLocation", FILL_IN)  # f"{checkpoint_dir}/hourly_sales"
-    .trigger(FILL_IN)  # availableNow=True
-    .start(FILL_IN)  # f"{working_dir}/hourly_sales"
+    .format(  )  # Delta format
+    .outputMode(  )  # Append mode
+    .option("checkpointLocation",  )  # Checkpoint path
+    .trigger(  )  # availableNow=True
+    .start(  )  # Output path for hourly_sales
 )
 
 # Process all available data
@@ -468,15 +507,14 @@ print(f"✅ Task 2.3 complete: Wrote {hourly_results.count()} hourly aggregation
 
 # COMMAND ----------
 
-# TODO
-# Read hourly sales results and find peak hours
-# Order by total_sales descending to see busiest hours
+# TODO: Read hourly sales results and find peak hours
+# Read from Delta output and sort by total_sales descending
 
 from pyspark.sql.functions import desc
 
 peak_hours_df = (spark.read
-    .format(FILL_IN)  # "delta"
-    .load(FILL_IN)  # f"{working_dir}/hourly_sales"
+    .format(  )  # Delta format
+    .load(  )  # Path to hourly_sales output
     .select(
         col("window.start").alias("hour_start"),
         col("window.end").alias("hour_end"),
@@ -485,7 +523,7 @@ peak_hours_df = (spark.read
         col("transaction_count"),
         col("avg_transaction_value")
     )
-    .orderBy(FILL_IN)  # desc("total_sales")
+    .orderBy(  )  # Sort by total_sales descending
 )
 
 display(peak_hours_df)
@@ -521,24 +559,24 @@ print("📝 Management can use this to schedule staff during busy periods!")
 
 # COMMAND ----------
 
-# TODO
-# Read streaming data, filter for high-value transactions, write and verify
+# TODO: Read streaming data, filter for high-value transactions, write and verify
+# Filter for transactions with totalPrice > 50
 
 streaming_df = (spark.readStream
     .format("delta")
     .load(f"{working_dir}/streaming_source")
 )
 
-high_value_stream = streaming_df.filter(col(FILL_IN) > FILL_IN)  # "totalPrice" > 50
+high_value_stream = streaming_df.filter(col(  ) >  )  # Filter condition
 
 # Write filtered stream to Delta
 filter_query = (high_value_stream
     .writeStream
-    .format(FILL_IN)  # "delta"
-    .outputMode(FILL_IN)  # "append"
-    .option("checkpointLocation", FILL_IN)  # f"{checkpoint_dir}/high_value_filter"
-    .trigger(FILL_IN)  # availableNow=True
-    .start(FILL_IN)  # f"{working_dir}/high_value_filter"
+    .format(  )  # Delta format
+    .outputMode(  )  # Append mode
+    .option("checkpointLocation",  )  # Checkpoint path
+    .trigger(  )  # availableNow=True
+    .start(  )  # Output path
 )
 
 # Wait for processing to complete
@@ -566,15 +604,15 @@ print("✅ Task 3.1 complete: Filtered for high-value transactions")
 
 # COMMAND ----------
 
-# TODO
-# Aggregate streaming data by traffic_source
+# TODO: Aggregate streaming data by traffic_source
+# Group by traffic source and calculate revenue metrics
 
 traffic_metrics_df = (streaming_df
-    .groupBy(FILL_IN)  # "traffic_source"
+    .groupBy(  )  # Column to group by
     .agg(
-        sum(FILL_IN).alias("total_revenue"),  # "totalPrice"
-        count(FILL_IN).alias("transaction_count"),  # "transactionID"
-        avg(FILL_IN).alias("avg_order_value")  # "totalPrice"
+        sum(  ).alias("total_revenue"),  # Column to sum
+        count(  ).alias("transaction_count"),  # Column to count
+        avg(  ).alias("avg_order_value")  # Column to average
     )
 )
 
@@ -591,9 +629,9 @@ streaming_df_with_watermark = (spark.readStream
 traffic_metrics_df = (streaming_df_with_watermark
     .groupBy("traffic_source")
     .agg(
-        sum(FILL_IN).alias("total_revenue"),  # "totalPrice"
-        count(FILL_IN).alias("transaction_count"),  # "transactionID"
-        avg(FILL_IN).alias("avg_order_value")  # "totalPrice"
+        sum(  ).alias("total_revenue"),  # Column to sum
+        count(  ).alias("transaction_count"),  # Column to count
+        avg(  ).alias("avg_order_value")  # Column to average
     )
 )
 
@@ -629,17 +667,17 @@ print("✅ Task 3.2 complete: Traffic source metrics calculated")
 
 # COMMAND ----------
 
-# TODO
-# Aggregate by traffic_source and franchiseID
+# TODO: Aggregate by traffic_source and franchiseID
+# Multi-dimensional aggregation to analyze channels by location
 
 franchise_traffic_metrics_df = (streaming_df
     .groupBy(
-        FILL_IN,  # "traffic_source"
-        FILL_IN   # "franchiseID"
+          ,  # First grouping column
+            # Second grouping column
     )
     .agg(
-        sum(FILL_IN).alias("total_revenue"),  # "totalPrice"
-        count(FILL_IN).alias("transaction_count")  # "transactionID"
+        sum(  ).alias("total_revenue"),  # Column to sum
+        count(  ).alias("transaction_count")  # Column to count
     )
 )
 
@@ -678,20 +716,20 @@ print("📝 Marketing can now target specific channels for specific franchise lo
 
 # COMMAND ----------
 
-# TODO
-# Join streaming data with static franchises table
+# TODO: Join streaming data with static franchises table
+# Enrich stream with franchise name and city information
 
 # Load static franchises data
 franchises_df = spark.table("samples.bakehouse.sales_franchises")
 
 # Join stream with static data
 enriched_stream = (streaming_df
-    .join(FILL_IN, FILL_IN)  # franchises_df, "franchiseID"
+    .join(  ,  )  # DataFrame to join and join column
     .select(
         col("dateTime"),
         col("franchiseID"),
-        franchises_df[FILL_IN].alias("franchise_name"),  # "name"
-        franchises_df[FILL_IN].alias("franchise_city"),  # "city"
+        franchises_df[  ].alias("franchise_name"),  # Franchise name column
+        franchises_df[  ].alias("franchise_city"),  # Franchise city column
         col("traffic_source"),
         col("product"),
         col("totalPrice")
@@ -753,46 +791,46 @@ print("📝 Stream-static joins let you add context from slowly changing referen
 # COMMAND ----------
 
 # TODO: Complete the unified dashboard
-# Apply all streaming techniques learned
+# Apply all streaming techniques: watermarks, windowing, aggregations
 
 from pyspark.sql.functions import current_timestamp, sum, count, approx_count_distinct, avg
 
 # Create streaming source with watermark
 streaming_df = (spark.readStream
-    .format(FILL_IN)  # "delta"
-    .load(FILL_IN)  # f"{working_dir}/streaming_source"
-    .withWatermark(FILL_IN, FILL_IN)  # "dateTime", "10 minutes"
+    .format(  )  # Delta format
+    .load(  )  # Path to streaming source
+    .withWatermark(  ,  )  # Column name and watermark interval
 )
 
 # Metric 1: Running total sales by franchise
 running_total_df = (streaming_df
-    .groupBy(FILL_IN)  # "franchiseID"
+    .groupBy(  )  # Column to group by
     .agg(
-        sum(FILL_IN).alias("total_sales"),  # "totalPrice"
-        count(FILL_IN).alias("total_transactions"),  # "transactionID"
-        approx_count_distinct(FILL_IN).alias("unique_customers")  # "customerID"
+        sum(  ).alias("total_sales"),  # Column to sum
+        count(  ).alias("total_transactions"),  # Column to count
+        approx_count_distinct(  ).alias("unique_customers")  # Column for distinct count
     )
 )
 
 # Metric 2: Hourly sales trends
 hourly_trends_df = (streaming_df
     .groupBy(
-        window(col(FILL_IN), FILL_IN),  # "dateTime", "1 hour"
-        col(FILL_IN)  # "franchiseID"
+        window(col(  ),  ),  # Column and window duration
+        col(  )  # Additional grouping column
     )
     .agg(
-        sum(FILL_IN).alias("hourly_sales"),  # "totalPrice"
-        count(FILL_IN).alias("hourly_transactions")  # "transactionID"
+        sum(  ).alias("hourly_sales"),  # Column to sum
+        count(  ).alias("hourly_transactions")  # Column to count
     )
 )
 
 # Metric 3: Traffic source performance
 traffic_performance_df = (streaming_df
-    .groupBy(FILL_IN)  # "traffic_source"
+    .groupBy(  )  # Column to group by
     .agg(
-        sum(FILL_IN).alias("source_revenue"),  # "totalPrice"
-        count(FILL_IN).alias("source_transactions"),  # "transactionID"
-        avg(FILL_IN).alias("source_avg_value")  # "totalPrice"
+        sum(  ).alias("source_revenue"),  # Column to sum
+        count(  ).alias("source_transactions"),  # Column to count
+        avg(  ).alias("source_avg_value")  # Column to average
     )
 )
 
@@ -800,29 +838,29 @@ traffic_performance_df = (streaming_df
 # IMPORTANT: Use "complete" for non-windowed aggregations, "append" for windowed aggregations
 query1 = (running_total_df
     .writeStream
-    .format(FILL_IN)  # "delta"
-    .outputMode(FILL_IN)  # "complete" (non-windowed aggregation)
-    .option("checkpointLocation", FILL_IN)  # f"{checkpoint_dir}/dashboard_running_total"
-    .trigger(FILL_IN)  # availableNow=True
-    .start(FILL_IN)  # f"{working_dir}/dashboard_running_total"
+    .format(  )  # Delta format
+    .outputMode(  )  # Complete mode for non-windowed
+    .option("checkpointLocation",  )  # Checkpoint path
+    .trigger(  )  # availableNow=True
+    .start(  )  # Output path
 )
 
 query2 = (hourly_trends_df
     .writeStream
-    .format(FILL_IN)  # "delta"
-    .outputMode(FILL_IN)  # "append" (windowed aggregation)
-    .option("checkpointLocation", FILL_IN)  # f"{checkpoint_dir}/dashboard_hourly_trends"
-    .trigger(FILL_IN)  # availableNow=True
-    .start(FILL_IN)  # f"{working_dir}/dashboard_hourly_trends"
+    .format(  )  # Delta format
+    .outputMode(  )  # Append mode for windowed
+    .option("checkpointLocation",  )  # Checkpoint path
+    .trigger(  )  # availableNow=True
+    .start(  )  # Output path
 )
 
 query3 = (traffic_performance_df
     .writeStream
-    .format(FILL_IN)  # "delta"
-    .outputMode(FILL_IN)  # "complete" (non-windowed aggregation)
-    .option("checkpointLocation", FILL_IN)  # f"{checkpoint_dir}/dashboard_traffic_performance"
-    .trigger(FILL_IN)  # availableNow=True
-    .start(FILL_IN)  # f"{working_dir}/dashboard_traffic_performance"
+    .format(  )  # Delta format
+    .outputMode(  )  # Complete mode for non-windowed
+    .option("checkpointLocation",  )  # Checkpoint path
+    .trigger(  )  # availableNow=True
+    .start(  )  # Output path
 )
 
 # Monitor all queries

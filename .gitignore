@@ -293,6 +293,10 @@ notes/
 scratch/
 experiments/
 
+# Quizzes and solutions (not to be shared publicly)
+quizzes/
+solutions/
+
 # Test data created during labs
 test_data/
 sample_data/
